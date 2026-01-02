@@ -1,2 +1,34 @@
 # Ignore any url txt file in the repo
 *.txt
+
+# Binaries for programs and plugins
+url-health-checker
+url-health-checker.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below if you want to vendor)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE specific files (optional but recommended)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db

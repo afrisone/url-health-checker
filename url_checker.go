@@ -22,9 +22,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	err := run(ctx, *filePath, *maxParallel)
-
-	if err != nil {
+	if err := run(ctx, *filePath, *maxParallel); err != nil {
 		log.Fatalf("App error: %v\n", err)
 	}
 }
@@ -47,18 +45,18 @@ func run(ctx context.Context, filePath string, maxParallel int) error {
 	lineNum := 1
 
 	for scanner.Scan() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case sem <- struct{}{}:
-			// semaphore aquired, pause if full
-		}
-
 		URL := scanner.Text()
 
 		if URL == "" {
 			<-sem
 			continue
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case sem <- struct{}{}:
+			// semaphore aquired, pause if full
 		}
 
 		wg.Add(1)
@@ -84,7 +82,6 @@ func run(ctx context.Context, filePath string, maxParallel int) error {
 
 func checkURL(ctx context.Context, client *http.Client, URL string, lineNum int) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, URL, nil)
-	// resp, httpErr := client.Head(URL)
 
 	if err != nil {
 		printResult(lineNum, URL, err)

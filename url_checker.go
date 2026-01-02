@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -16,63 +19,90 @@ func main() {
 
 	flag.Parse()
 
-	timeout := 5 * time.Second
-	file, err := os.Open(*filePath)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	err := run(ctx, *filePath, *maxParallel)
 
 	if err != nil {
-		log.Println("Error reading file:", err)
-		os.Exit(1)
+		log.Fatalf("App error: %v\n", err)
+	}
+}
+
+func run(ctx context.Context, filePath string, maxParallel int) error {
+	file, err := os.Open(filePath)
+
+	if err != nil {
+		log.Println("Error opening file:", err)
+		return err
 	}
 	defer file.Close()
 
 	wg := new(sync.WaitGroup)
-	sem := make(chan struct{}, *maxParallel)
+	sem := make(chan struct{}, maxParallel)
 
 	scanner := bufio.NewScanner(file)
 
-	client := &http.Client{Timeout: timeout}
+	client := &http.Client{Timeout: 5 * time.Second}
 	lineNum := 1
 
 	for scanner.Scan() {
-		url := scanner.Text()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case sem <- struct{}{}:
+			// semaphore aquired, pause if full
+		}
 
-		if url == "" {
+		URL := scanner.Text()
+
+		if URL == "" {
+			<-sem
 			continue
 		}
 
 		wg.Add(1)
-		sem <- struct{}{}
 
-		go func(url string, lineNum int) {
+		go func(URL string, lineNum int) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			checkUrl(client, url, lineNum)
-		}(url, lineNum)
+			checkURL(ctx, client, URL, lineNum)
+		}(URL, lineNum)
 
 		lineNum++
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading file, %v\n", err)
+		log.Println("Error reading file", err)
 	}
 
 	wg.Wait()
+
+	return scanner.Err()
 }
 
-func checkUrl(client *http.Client, url string, lineNum int) {
-	resp, httpErr := client.Head(url)
+func checkURL(ctx context.Context, client *http.Client, URL string, lineNum int) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, URL, nil)
+	// resp, httpErr := client.Head(URL)
 
-	if httpErr != nil {
-		printResult(lineNum, url, httpErr)
+	if err != nil {
+		printResult(lineNum, URL, err)
+		return
+	}
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		printResult(lineNum, URL, err)
 		return
 	}
 
 	defer resp.Body.Close()
 
-	printResult(lineNum, url, resp.Status)
+	printResult(lineNum, URL, resp.Status)
 }
 
-func printResult(lineNum int, url string, result any) {
-	log.Printf("    | %d %s  Result: %v\n", lineNum, url, result)
+func printResult(lineNum int, URL string, result any) {
+	log.Printf("    | %d %s  Result: %v\n", lineNum, URL, result)
 }

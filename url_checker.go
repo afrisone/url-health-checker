@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -20,7 +20,7 @@ func main() {
 	file, err := os.Open(*filePath)
 
 	if err != nil {
-		fmt.Println("Error reading file:", err)
+		log.Println("Error reading file:", err)
 		os.Exit(1)
 	}
 	defer file.Close()
@@ -54,23 +54,25 @@ func main() {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error reading file, %v\n", err)
+		log.Printf("Error reading file, %v\n", err)
 	}
 
 	wg.Wait()
 }
 
 func checkUrl(client *http.Client, url string, lineNum int) {
-	fmt.Println("Checking....", url)
 	resp, httpErr := client.Head(url)
 
 	if httpErr != nil {
-		fmt.Printf("    | %d  Result: Error checking status\n", lineNum)
-		fmt.Println("        |", httpErr)
+		printResult(lineNum, url, httpErr)
 		return
 	}
 
 	defer resp.Body.Close()
 
-	fmt.Printf("    | %d %s  Result: %s\n", lineNum, url, resp.Status)
+	printResult(lineNum, url, resp.Status)
+}
+
+func printResult(lineNum int, url string, result any) {
+	log.Printf("    | %d %s  Result: %v\n", lineNum, url, result)
 }

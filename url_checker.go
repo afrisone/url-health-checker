@@ -48,7 +48,6 @@ func run(ctx context.Context, filePath string, maxParallel int) error {
 		URL := scanner.Text()
 
 		if URL == "" {
-			<-sem
 			continue
 		}
 
